@@ -70,8 +70,15 @@ int main(int argc, char** argv) {
   auto mesh =
       build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, nx, nx, (dim == 3) ? nx : 0);
   mesh.set_parting(OMEGA_H_GHOSTED);
-  auto metrics = get_implied_isos(&mesh);
-  mesh.add_tag(VERT, "metric", 1, metrics);
+
+  auto metrics = get_implied_metrics(&mesh);
+//  auto metrics = get_element_implied_size_metrics(&mesh);
+  mesh.add_tag(VERT, "metric", 6, metrics);
+
+  bool ok = check_regression("gold_warp", &mesh);
+  if (!ok) return 2;
+  return 0;
+
   add_dye(&mesh);
   mesh.add_tag(mesh.dim(), "density", 1, Reals(mesh.nelems(), 1.0));
   add_pointwise(&mesh);
@@ -122,7 +129,4 @@ int main(int argc, char** argv) {
   }
   check_total_mass(&mesh);
   postprocess_pointwise(&mesh);
-  bool ok = check_regression("gold_warp", &mesh);
-  if (!ok) return 2;
-  return 0;
 }

@@ -226,6 +226,8 @@ Reals apply_isotropy(LO nmetrics, Reals metrics, Omega_h_Isotropy isotropy);
 Reals isos_from_lengths(Reals h);
 Reals lengths_from_isos(Reals l);
 
+Reals get_element_implied_size_metrics(Mesh* mesh);
+
 }  // end namespace Omega_h
 
 #endif

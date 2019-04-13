@@ -1,6 +1,7 @@
 #include "Omega_h_metric.hpp"
 
 #include <iostream>
+#include <iomanip>
 
 #include "Omega_h_array_ops.hpp"
 #include "Omega_h_confined.hpp"
@@ -13,6 +14,8 @@
 #include "Omega_h_shape.hpp"
 #include "Omega_h_simplex.hpp"
 #include "Omega_h_surface.hpp"
+
+#include <Omega_h_print.hpp>
 
 namespace Omega_h {
 
@@ -218,23 +221,113 @@ Reals limit_metric_gradation(
   return values2;
 }
 
+// TODO: LOOK INTO WHY THIS DIFFS
+// for warp_test w/ kokkos backend w/ MPI 
 template <Int metric_dim>
 Reals project_metrics_dim(Mesh* mesh, Reals e2m) {
   auto e_linear = linearize_metrics(mesh->nelems(), e2m);
   auto v2e = mesh->ask_up(VERT, mesh->dim());
   auto v_metrics_w = Write<Real>(mesh->nverts() * symm_ncomps(metric_dim));
+  auto globals = mesh->globals(VERT);
+  auto elem_globals = mesh->globals(REGION);
+  Write<double> debug(3, -1);
+  Write<GO> debug2(10, -1);
+  Write<double> debug3(9, -1);
   auto f = OMEGA_H_LAMBDA(LO v) {
     auto vm = zero_matrix<metric_dim, metric_dim>();
     Int n = 0;
     for (auto ve = v2e.a2ab[v]; ve < v2e.a2ab[v + 1]; ++ve) {
       auto e = v2e.ab2b[ve];
+      auto eg = elem_globals[e];
       auto em = get_symm<metric_dim>(e2m, e);
-      average_metric_contrib(vm, n, em, true);
+
+      {
+       // if (true && max_norm(em) < OMEGA_H_EPSILON) {}
+       // else {
+          em = linearize_metric(em);
+
+          vm += em;
+
+          n++;
+       // }
+      }
+
+      //average_metric_contrib(vm, n, em, true);
     }
-    vm = average_metric_finish(vm, n, true);
+
+    //if (true && n == 0) {}
+    //else {
+      vm /= n;
+
+      {
+
+#if 0
+        Real nm = max_norm(vm);
+        vm = vm / nm;
+
+        DiagDecomp<metric_dim> decomp;
+
+        {
+          auto roots_obj = get_eigenvalues(vm);
+          auto nroots = roots_obj.n;
+          auto roots = roots_obj.values;
+          auto mults = roots_obj.mults;
+          /* there are only a few output cases, see solve_cubic() */
+          Tensor<3> q;
+          Vector<3> l;
+          if (nroots == 3) {
+            for (Int i = 0; i < 3; ++i) {
+              q[i] = single_eigenvector(vm, roots[i]);
+              l[i] = roots[i];
+            }
+          } else if (nroots == 2 && mults[1] == 2) {
+            q[0] = single_eigenvector(vm, roots[0]);
+            l[0] = roots[0];
+            auto dev = double_eigenvector(vm, roots[1]);
+            q[1] = dev[0];
+            q[2] = dev[1];
+            l[1] = l[2] = roots[1];
+          } else {
+            OMEGA_H_CHECK(nroots == 1 && mults[0] == 3);
+            l[0] = l[1] = l[2] = roots[0];
+            q = identity_matrix<3, 3>();
+          }
+          decomp = {q, l * nm};
+        }
+#else
+        auto decomp = decompose_eigen_dim(vm);
+#endif
+
+        for (Int i = 0; i < metric_dim; ++i) {
+          if (globals[v] == 581) {
+            debug[i] = decomp.l[i];
+          }
+          decomp.l[i] = std::exp(decomp.l[i]);
+        }
+        if (globals[v] == 581) {
+          set_matrix(debug3, 0, decomp.q);
+        }
+        vm =  compose_ortho(decomp.q, decomp.l);
+      }
+
+      //vm = delinearize_metric(vm);
+
+    //}
+
+    //vm = average_metric_finish(vm, n, true);
+
     set_symm(v_metrics_w, v, vm);
   };
   parallel_for(mesh->nverts(), f);
+
+//  std::cout << HostRead<GO>(read(debug2)) << std::endl << std::endl;
+  
+  std::cout << std::setprecision(17);
+  std::cout << std::scientific;
+//  std::cout << "vm before: " << HostRead<double>(read(debug)) << std::endl << std::endl;
+
+  std::cout << "q: " << HostRead<double>(read(debug3)) << std::endl;
+
   auto v_metrics = Reals(v_metrics_w);
   return mesh->sync_array(VERT, v_metrics, symm_ncomps(metric_dim));
 }
@@ -243,10 +336,12 @@ Reals project_metrics(Mesh* mesh, Reals e2m) {
   auto metric_dim = get_metrics_dim(mesh->nelems(), e2m);
   if (metric_dim == 3)
     return project_metrics_dim<3>(mesh, e2m);
+  /*
   else if (metric_dim == 2)
     return project_metrics_dim<2>(mesh, e2m);
   else if (metric_dim == 1)
     return project_metrics_dim<1>(mesh, e2m);
+    */
   else
     OMEGA_H_NORETURN(Reals());
 }
@@ -293,7 +388,7 @@ static constexpr Real get_typical_over_perfect_size(Int dim) {
   return typical_unit_simplex_size(dim) / equilateral_simplex_size(dim);
 }
 
-static Reals get_element_implied_size_metrics(Mesh* mesh) {
+Reals get_element_implied_size_metrics(Mesh* mesh) {
   auto length_metrics = get_element_implied_length_metrics(mesh);
   auto typical_over_perfect = get_typical_over_perfect_size(mesh->dim());
   auto size_scalar = typical_over_perfect;
