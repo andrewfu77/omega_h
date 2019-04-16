@@ -39,7 +39,7 @@ static void refine_ghosted(Mesh* mesh) {
   }
 }
 
-static void refine_elem_based(Mesh* mesh, TransferOpts xfer_opts) {
+static void refine_elem_based(Mesh* mesh) {
   auto prod_counts = amr::count_refined(mesh);
   Few<Bytes, 4> mds_are_mods;
   Few<LOs, 4> mods2mds;
@@ -95,8 +95,7 @@ static void refine_elem_based(Mesh* mesh, TransferOpts xfer_opts) {
         offset = end;
       }
       amr::transfer_linear_interp(mesh, &new_mesh, mods2mds, mods2midverts,
-          same_ents2old_ents[prod_dim], same_ents2new_ents[prod_dim],
-          xfer_opts);
+          same_ents2old_ents[prod_dim], same_ents2new_ents[prod_dim]);
     }
     amr::transfer_levels(mesh, &new_mesh, prod_dim, mods2mds,
         prods2new_ents[prod_dim], same_ents2old_ents[prod_dim],
@@ -109,17 +108,17 @@ static void refine_elem_based(Mesh* mesh, TransferOpts xfer_opts) {
   amr::transfer_parents(mesh, &new_mesh, mods2mds, prods2new_ents,
       same_ents2old_ents, same_ents2new_ents, old_ents2new_ents);
   amr::transfer_inherit(mesh, &new_mesh, prods2new_ents, same_ents2old_ents,
-      same_ents2new_ents, xfer_opts);
+      same_ents2new_ents);
   *mesh = new_mesh;
 }
 
-void refine(Mesh* mesh, Bytes elems_are_marked, TransferOpts xfer_opts) {
+void refine(Mesh* mesh, Bytes elems_are_marked) {
   OMEGA_H_CHECK(mesh->family() == OMEGA_H_HYPERCUBE);
   amr::mark_refined(mesh, elems_are_marked);
   mesh->set_parting(OMEGA_H_GHOSTED);
   amr::refine_ghosted(mesh);
   mesh->set_parting(OMEGA_H_ELEM_BASED);
-  amr::refine_elem_based(mesh, xfer_opts);
+  amr::refine_elem_based(mesh);
 }
 
 }  // namespace amr

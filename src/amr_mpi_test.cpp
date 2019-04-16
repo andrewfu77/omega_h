@@ -1,9 +1,29 @@
 #include <Omega_h_amr.hpp>
 #include <Omega_h_build.hpp>
 #include <Omega_h_file.hpp>
+#include <Omega_h_for.hpp>
+#include <Omega_h_print.hpp>
 #include <iostream>
 
 namespace Omega_h {
+
+static Read<I32> codes_to_dim(Read<I8> codes) {
+  Write<I32> dim(codes.size());
+  auto functor = OMEGA_H_LAMBDA(LO i) {
+    dim[i] = amr::code_parent_dim(codes[i]);
+  };
+  parallel_for(codes.size(), std::move(functor));
+  return dim;
+}
+
+static Read<I32> codes_to_child(Read<I8> codes) {
+  Write<I32> child(codes.size());
+  auto functor = OMEGA_H_LAMBDA(LO i) {
+    child[i] = amr::code_which_child(codes[i]);
+  };
+  parallel_for(codes.size(), std::move(functor));
+  return child;
+}
 
 static void test_2D_case1(CommPtr comm) {
   auto mesh = build_box(comm, OMEGA_H_HYPERCUBE,
@@ -13,29 +33,23 @@ static void test_2D_case1(CommPtr comm) {
   {
     Write<Byte> marks(mesh.nelems(), 0);
     if (comm->rank() == 1) marks.set(0, 1);
-    const auto xfer_opts = TransferOpts();
-    amr::refine(&mesh, marks, xfer_opts);
+    amr::refine(&mesh, marks);
   }
+
   if (comm->rank() == 0) {
-    std::cout << "nelems on rank 0 after first adapt: " << mesh.nelems() << '\n';
-    std::cout << "nedges on rank 0 after first adapt: " << mesh.nedges() << '\n';
-    std::cout << "nverts on rank 0 after first adapt: " << mesh.nverts() << '\n';
+    auto parents = mesh.ask_parents(1);
+    std::cout << "parents idx: " << parents.parent_idx << std::endl;
+    std::cout << "parents dim: " << codes_to_dim(parents.codes) << std::endl;
+    std::cout << "parents which child: " << codes_to_child(parents.codes) << std::endl;
   }
+ 
   writer.write();
   {
     Write<Byte> marks(mesh.nelems(), 0); 
     if (comm->rank() == 1) marks.set(2, 1);
-    const auto xfer_opts = TransferOpts();
-    amr::refine(&mesh, marks, xfer_opts);
+    amr::refine(&mesh, marks);
   }
-  // why did the two child edges and one child vert on rank 0
-  // after the second adapt when no elements on the partition
-  // boundary were modified?
-  if (comm->rank() == 0) {
-    std::cout << "nelems on rank 0 after second adapt: " << mesh.nelems() << '\n';
-    std::cout << "nedges on rank 0 after second adapt: " << mesh.nedges() << '\n';
-    std::cout << "nverts on rank 0 after second adapt: " << mesh.nverts() << '\n';
-  }
+
   writer.write();
 }
 

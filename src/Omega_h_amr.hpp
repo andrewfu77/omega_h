@@ -18,7 +18,7 @@ OMEGA_H_INLINE constexpr I8 make_code(Int which_child, Int parent_dim) {
   return static_cast<I8>((which_child << 2) | parent_dim);
 }
 
-void refine(Mesh* mesh, Bytes elems_are_marked, TransferOpts xfer_opts);
+void refine(Mesh* mesh, Bytes elems_are_marked);
 
 }  // namespace amr
 

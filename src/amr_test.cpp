@@ -120,8 +120,7 @@ static void test_2D_arrays(Omega_h::Library* lib) {
   auto m = Omega_h::build_box(w, f, 2.0, 1.0, 0.0, 2, 1, 0);
   Int lengths[3] = {6, 7, 2};
   check_before(&m, lengths);
-  auto xfer_opts = Omega_h::TransferOpts();
-  Omega_h::amr::refine(&m, Omega_h::Bytes({1, 0}), xfer_opts);
+  Omega_h::amr::refine(&m, Omega_h::Bytes({1, 0}));
   check_2D_after(&m);
 }
 
@@ -259,7 +258,7 @@ static void test_3D_arrays(Omega_h::Library* lib) {
   Int lengths[4] = {12, 20, 11, 2};
   check_before(&m, lengths);
   auto xfer_opts = Omega_h::TransferOpts();
-  Omega_h::amr::refine(&m, Omega_h::Bytes({1, 0}), xfer_opts);
+  Omega_h::amr::refine(&m, Omega_h::Bytes({1, 0}));
   check_3D_after(&m);
 }
 

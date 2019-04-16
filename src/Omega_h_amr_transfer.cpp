@@ -13,7 +13,8 @@ namespace amr {
 /* used to transfer coordinates */
 void transfer_linear_interp(Mesh* old_mesh, Mesh* new_mesh,
     Few<LOs, 4> mods2mds, Few<LOs, 4> mods2midverts, LOs same_ents2old_ents,
-    LOs same_ents2new_ents, TransferOpts opts) {
+    LOs same_ents2new_ents) {
+  TransferOpts opts;
   for (Int i = 0; i < old_mesh->ntags(VERT); ++i) {
     auto tagbase = old_mesh->get_tag(VERT, i);
     if (!should_interpolate(old_mesh, opts, VERT, tagbase)) continue;
@@ -202,7 +203,8 @@ static void validate_tag(Mesh* m, TagBase const* tagbase) {
 /* used to transfer class_id and class_dim */
 void transfer_inherit(Mesh* old_mesh, Mesh* new_mesh,
     Few<LOs, 4> prods2new_ents, Few<LOs, 4> same_ents2old_ents,
-    Few<LOs, 4> same_ents2new_ents, TransferOpts const& opts) {
+    Few<LOs, 4> same_ents2new_ents) {
+  TransferOpts opts;
   for (Int i = 0; i < old_mesh->ntags(0); ++i) {
     auto tagbase = old_mesh->get_tag(0, i);
     if (should_inherit(old_mesh, opts, 0, tagbase)) {
