@@ -14,72 +14,6 @@ namespace Omega_h {
 
 namespace amr {
 
-void remove_non_leaf_uses(Mesh* mesh) {
-  Bytes ent_persists[4];
-  auto elem_dim = mesh->dim();
-  ent_persists[elem_dim] = mesh->ask_leaves(elem_dim);
-  for (Int ent_dim = 0; ent_dim < elem_dim; ++ent_dim) {
-    ent_persists[ent_dim] = mark_down(
-        mesh, elem_dim, ent_dim, ent_persists[elem_dim]);
-  }
-  LOs new_ents2old_ents[4];
-  for (Int ent_dim = 0; ent_dim <= elem_dim; ++ent_dim) {
-    new_ents2old_ents[ent_dim] = collect_marked(ent_persists[ent_dim]);
-  }
-  unmap_mesh(mesh, new_ents2old_ents);
-}
-
-static OMEGA_H_DEVICE Byte should_elem_be_refined(LO elem, Adj elems2bridges,
-    Adj bridges2elems, Bytes is_interior, Bytes is_bridge_leaf,
-    Int nbridges_per_elem, Children children, Bytes elems_are_marked,
-    Write<Byte> one_level_mark) {
-  Byte mark = 0;
-  for (Int b = 0; b < nbridges_per_elem; ++b) {
-    auto bridge = elems2bridges.ab2b[elem * nbridges_per_elem + b];
-    if (!is_interior[bridge]) continue;
-    if (is_bridge_leaf[bridge]) continue;
-    auto bridge_child_begin = children.a2ab[bridge];
-    auto bridge_child_end = children.a2ab[bridge + 1];
-    for (auto c = bridge_child_begin; c < bridge_child_end; ++c) {
-      auto child = children.ab2b[c];
-      auto child_adj_elem_begin = bridges2elems.a2ab[child];
-      auto child_adj_elem_end = bridges2elems.a2ab[child + 1];
-      OMEGA_H_CHECK((child_adj_elem_end - child_adj_elem_begin) == 1);
-      auto child_adj_elem = bridges2elems.ab2b[child_adj_elem_begin];
-      if (elems_are_marked[child_adj_elem]) mark = 1;
-      if (one_level_mark[child_adj_elem]) mark = 1;
-    }
-  }
-  return mark;
-}
-
-Bytes enforce_2to1_refine(Mesh* mesh, Int bridge_dim, Bytes elems_are_marked) {
-  auto elem_dim = mesh->dim();
-  OMEGA_H_CHECK(bridge_dim > 0);
-  OMEGA_H_CHECK(bridge_dim < elem_dim);
-  auto is_elem_leaf = mesh->ask_leaves(elem_dim);
-  auto is_bridge_leaf = mesh->ask_leaves(bridge_dim);
-  auto elems2bridges = mesh->ask_down(elem_dim, bridge_dim);
-  auto bridges2elems = mesh->ask_up(bridge_dim, elem_dim);
-  auto nbridges_per_elem = Omega_h::hypercube_degree(elem_dim, bridge_dim);
-  auto is_interior = Omega_h::mark_by_class_dim(mesh, bridge_dim, elem_dim);
-  auto children = mesh->ask_children(bridge_dim, bridge_dim);
-  Write<Byte> one_level_mark(mesh->nelems());
-  auto f = OMEGA_H_LAMBDA(LO elem) {
-    if (!is_elem_leaf[elem]) {
-      one_level_mark[elem] = 0;
-    } else if (elems_are_marked[elem]) {
-      one_level_mark[elem] = 1;
-    } else {
-      one_level_mark[elem] = should_elem_be_refined(elem, elems2bridges,
-          bridges2elems, is_interior, is_bridge_leaf, nbridges_per_elem,
-          children, elems_are_marked, one_level_mark);
-    }
-  };
-  Omega_h::parallel_for(mesh->nelems(), f, "enforce_one_level");
-  return one_level_mark;
-}
-
 static void refine_ghosted(Mesh* mesh) {
   Few<LOs, 4> mods2mds;
   for (Int mod_dim = 0; mod_dim <= mesh->dim(); ++mod_dim) {
@@ -186,26 +120,6 @@ void refine(Mesh* mesh, Bytes elems_are_marked, TransferOpts xfer_opts) {
   amr::refine_ghosted(mesh);
   mesh->set_parting(OMEGA_H_ELEM_BASED);
   amr::refine_elem_based(mesh, xfer_opts);
-}
-
-void derefine(Mesh* mesh, Bytes elems_are_marked, TransferOpts xfer_opts) {
-  OMEGA_H_CHECK(mesh->family() == OMEGA_H_HYPERCUBE);
-  amr::tag_derefined(mesh, elems_are_marked);
-  LOs new_ents2old_ents[4];
-  GOs new_globals[4];
-  for (int ent_dim = 0; ent_dim <= mesh->dim(); ++ent_dim) {
-    auto does_ent_persist = mesh->get_array<Byte>(ent_dim, "persists");
-    new_ents2old_ents[ent_dim] = collect_marked(does_ent_persist);
-    mesh->remove_tag(ent_dim, "persists");
-    auto old_ents2new_globals = rescan_globals(mesh, does_ent_persist);
-    new_globals[ent_dim] =
-        unmap(new_ents2old_ents[ent_dim], old_ents2new_globals, 1);
-  }
-  unmap_mesh(mesh, new_ents2old_ents);
-  for (int ent_dim = 0; ent_dim <= mesh->dim(); ++ent_dim) {
-    mesh->set_tag(ent_dim, "global", new_globals[ent_dim]);
-  }
-  (void)xfer_opts;
 }
 
 }  // namespace amr

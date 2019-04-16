@@ -12,7 +12,6 @@ class Mesh;
 namespace amr {
 
 void mark_refined(Mesh* mesh, Bytes elems_are_marked);
-void tag_derefined(Mesh* mesh, Bytes elems_are_marked);
 
 Few<LO, 4> count_refined(Mesh* mesh);
 
